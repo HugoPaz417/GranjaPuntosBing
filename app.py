@@ -4,9 +4,15 @@ import requests
 import time
 import pyautogui
 import os
+import zipfile
+import shutil
+import sys
 
-CURRENT_VERSION = "1.0.0"
-VERSION_URL = "https://example.com/version.json"
+# Versión actual del programa
+CURRENT_VERSION = "1.1.1"
+
+# URL del archivo version.json en GitHub
+VERSION_URL = "https://raw.githubusercontent.com/HugoPaz417/GranjaPuntosBing/main/version.json"
 
 def abrir_edge():
     pyautogui.press("win")
@@ -16,39 +22,38 @@ def abrir_edge():
     pyautogui.press("enter") 
     time.sleep(2)
 
-def cerrar_edge():
-    pyautogui.hotkey("alt", "f4")
-    time.sleep(1)
-    
 def obtener_palabras(cantidad=2):
-    url = f"https://random-word-api.herokuapp.com/word?number={cantidad}"
-    respuesta = requests.get(url)
-    if respuesta.status_code == 200:
-        return respuesta.json()
-    else:
-        messagebox.showerror("Error", "No se pudieron obtener palabras.")
+    url = f"https://api.datamuse.com/words?ml=example&max={cantidad}"
+    try:
+        respuesta = requests.get(url)
+        if respuesta.status_code == 200:
+            return [palabra["word"] for palabra in respuesta.json()]
+        else:
+            messagebox.showerror("Error", "No se pudieron obtener palabras.")
+            return []
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al obtener palabras: {e}")
         return []
 
 def iniciar_busquedas():
+    messagebox.showinfo("Iniciando", "Tite")
     abrir_edge()
     pyautogui.write("https://rewards.bing.com/?ref=rewardspanel", interval=0.1)
     pyautogui.press("enter")
-    time.sleep(1)
+    time.sleep(3)
     for _ in range(30):
         pyautogui.press("tab")
         time.sleep(0.01)
     time.sleep(2)
+    
     for i in range(4):
-        if i != 3:
-            pyautogui.press("tab")
-            pyautogui.press("tab")
-        else:
-            pyautogui.press("tab")
+        pyautogui.press("tab", presses=2 if i != 3 else 1)
         time.sleep(0.2)
         pyautogui.press("enter")
         time.sleep(2)
         pyautogui.hotkey("ctrl", "w")
         time.sleep(1)
+    
     try:
         cantidad = int(entry_cantidad.get())
     except ValueError:
@@ -78,12 +83,12 @@ def check_for_updates():
             data = response.json()
             latest_version = data["version"]
             download_url = data["download_url"]
-
+            
             if latest_version > CURRENT_VERSION:
-                if messagebox.askyesno("Actualización disponible", f"Hay una nueva versión ({latest_version}). ¿Desea descargarla?"):
+                if messagebox.askyesno("Actualización disponible", f"Hay una nueva versión ({latest_version}). ¿Desea actualizar ahora?"):
                     download_update(download_url)
             else:
-                messagebox.showinfo("Actualización", "Ya tiene la última versión.")
+                messagebox.showinfo("Actualización", "Ya tienes la última versión.")
         else:
             messagebox.showerror("Error", "No se pudo verificar actualizaciones.")
     except Exception as e:
@@ -91,18 +96,51 @@ def check_for_updates():
 
 def download_update(url):
     try:
+        update_zip = "update.zip"
         response = requests.get(url, stream=True)
+        
         if response.status_code == 200:
-            with open("update.exe", "wb") as file:
+            with open(update_zip, "wb") as file:
                 for chunk in response.iter_content(chunk_size=1024):
                     file.write(chunk)
-            messagebox.showinfo("Actualización", "Descarga completada. Ejecute 'update.exe' para instalar la nueva versión.")
-            os.startfile("update.exe")
+            messagebox.showinfo("Actualización", "Descarga completada. Instalando la nueva versión...")
+            install_update(update_zip)
         else:
             messagebox.showerror("Error", "No se pudo descargar la actualización.")
     except Exception as e:
         messagebox.showerror("Error", f"Error al descargar la actualización: {e}")
 
+def install_update(zip_path):
+    try:
+        temp_folder = "update_temp"
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(temp_folder)
+        
+        extracted_folder = os.path.join(temp_folder, os.listdir(temp_folder)[0])
+        
+        for item in os.listdir(extracted_folder):
+            s = os.path.join(extracted_folder, item)
+            d = os.path.join(os.getcwd(), item)
+            if os.path.isdir(s):
+                if os.path.exists(d):
+                    shutil.rmtree(d)
+                shutil.move(s, d)
+            else:
+                shutil.move(s, d)
+        
+        os.remove(zip_path)
+        shutil.rmtree(temp_folder)
+
+        messagebox.showinfo("Actualización", "Actualización completada. Reiniciando aplicación...")
+        restart_app()
+    except Exception as e:
+        messagebox.showerror("Error", f"Error al instalar la actualización: {e}")
+
+def restart_app():
+    python = sys.executable
+    os.execl(python, python, *sys.argv)
+
+# Interfaz gráfica
 root = tk.Tk()
 root.title("Buscador Automático")
 root.geometry("300x200")
